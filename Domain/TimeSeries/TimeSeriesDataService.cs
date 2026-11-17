@@ -31,6 +31,15 @@ public sealed class TimeSeriesDataService(INordicRccDbContext database) : ITimeS
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<GetTimeSeriesDataByIdResult> GetByIdAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var entry = await database.TimeSeriesData
+            .AsNoTracking()
+            .SingleOrDefaultAsync(data => data.Id == id, cancellationToken);
+
+        return entry is null ? new TimeSeriesDataNotFound(id) : entry;
+    }
+
     public async Task<CreateTimeSeriesDataResult> CreateAsync(
         NewTimeSeriesData data,
         CancellationToken cancellationToken = default)

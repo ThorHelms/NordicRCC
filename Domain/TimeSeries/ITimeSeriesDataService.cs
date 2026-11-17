@@ -10,6 +10,11 @@ public interface ITimeSeriesDataService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets the time series data entry with the id, or <see cref="TimeSeriesDataNotFound"/> when there is none.
+    /// </summary>
+    Task<GetTimeSeriesDataByIdResult> GetByIdAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Creates a time series data entry, if it is valid. A rejected entry leaves the data that the system
     /// holds unchanged.
     /// </summary>

@@ -11,7 +11,8 @@ public sealed record TimeSeriesData(
     decimal CrossBorderFlow)
 {
     /// <summary>
-    /// The identity of the data in the database, assigned when it is saved.
+    /// The id that identifies the entry. The system assigns it when the entry is saved, unless the entry
+    /// already has an id, for example because it was imported together with its id.
     /// </summary>
-    public long Id { get; private set; }
+    public long Id { get; init; }
 }

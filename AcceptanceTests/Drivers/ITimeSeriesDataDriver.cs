@@ -12,6 +12,11 @@ public interface ITimeSeriesDataDriver
     /// </summary>
     Task<TimeSeriesDataCreation> CreateAsync(NewTimeSeriesData data);
 
+    /// <summary>
+    /// Fetches the time series data entry with the id, which the system may not hold.
+    /// </summary>
+    Task<TimeSeriesDataEntryFetch> FetchByIdAsync(long id);
+
     Task<IReadOnlyList<TimeSeriesData>> FetchAllAsync();
 
     Task<IReadOnlyList<TimeSeriesData>> FetchForBiddingZoneAsync(string biddingZone);

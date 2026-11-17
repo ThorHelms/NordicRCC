@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using NordicRCC.Domain.TimeSeries;
 
 namespace NordicRCC.Application.Api.TimeSeries;
@@ -10,10 +11,15 @@ public static class TimeSeriesDataEndpoints
     /// </summary>
     public const string ErrorCodesExtension = "errorCodes";
 
+    private const string GetTimeSeriesDataByIdRoute = "GetTimeSeriesDataById";
+
     public static IEndpointRouteBuilder MapTimeSeriesDataEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/time-series-data", GetTimeSeriesDataAsync)
             .WithName("GetTimeSeriesData");
+
+        endpoints.MapGet("/time-series-data/{id:long}", GetTimeSeriesDataByIdAsync)
+            .WithName(GetTimeSeriesDataByIdRoute);
 
         // ProblemHttpResult can carry any status code, so it doesn't document one by itself.
         endpoints.MapPost("/time-series-data", CreateTimeSeriesDataAsync)
@@ -33,7 +39,26 @@ public static class TimeSeriesDataEndpoints
         return [.. data.Select(TimeSeriesDataDto.From)];
     }
 
-    private static async Task<Results<Created<TimeSeriesDataDto>, ValidationProblem, ProblemHttpResult>>
+    private static async Task<Results<Ok<TimeSeriesDataDto>, NotFound<ProblemDetails>>> GetTimeSeriesDataByIdAsync(
+        long id,
+        ITimeSeriesDataService timeSeriesData,
+        CancellationToken cancellationToken)
+    {
+        var result = await timeSeriesData.GetByIdAsync(id, cancellationToken);
+
+        return result switch
+        {
+            TimeSeriesData entry => TypedResults.Ok(TimeSeriesDataDto.From(entry)),
+            TimeSeriesDataNotFound notFound => TypedResults.NotFound(new ProblemDetails
+            {
+                Title = "The time series data was not found.",
+                Detail = $"There is no time series data entry with id {notFound.Id}.",
+                Status = StatusCodes.Status404NotFound,
+            }),
+        };
+    }
+
+    private static async Task<Results<CreatedAtRoute<TimeSeriesDataDto>, ValidationProblem, ProblemHttpResult>>
         CreateTimeSeriesDataAsync(
             CreateTimeSeriesDataRequest request,
             ITimeSeriesDataService timeSeriesData,
@@ -43,12 +68,15 @@ public static class TimeSeriesDataEndpoints
 
         return result switch
         {
-            TimeSeriesData created => TypedResults.Created((string?)null, TimeSeriesDataDto.From(created)),
+            TimeSeriesData created => TypedResults.CreatedAtRoute(
+                TimeSeriesDataDto.From(created),
+                GetTimeSeriesDataByIdRoute,
+                new { id = created.Id }),
             TimeSeriesDataValidationFailed failed => ToProblem(failed),
         };
     }
 
-    private static Results<Created<TimeSeriesDataDto>, ValidationProblem, ProblemHttpResult> ToProblem(
+    private static Results<CreatedAtRoute<TimeSeriesDataDto>, ValidationProblem, ProblemHttpResult> ToProblem(
         TimeSeriesDataValidationFailed failed)
     {
         var extensions = new Dictionary<string, object?>

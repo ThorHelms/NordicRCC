@@ -9,14 +9,18 @@ namespace NordicRCC.AcceptanceTests.Drivers.Api;
 
 public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDriver
 {
-    // Recorded data comes from an external source, not from users, so it's stored in the database directly.
+    // Recorded data comes from an external source, not from users, so it's stored in the database directly,
+    // together with its id.
     public async Task RecordAsync(IEnumerable<TimeSeriesData> data)
     {
         using var scope = host.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<INordicRccDbContext>();
 
         database.TimeSeriesData.AddRange(data.Select(item => new StoredTimeSeriesData(
-            item.Timestamp, item.BiddingZone, item.Production, item.Consumption, item.CrossBorderFlow)));
+            item.Timestamp, item.BiddingZone, item.Production, item.Consumption, item.CrossBorderFlow)
+        {
+            Id = item.Id,
+        }));
 
         await database.SaveChangesAsync();
     }
@@ -28,7 +32,11 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
         switch (response.StatusCode)
         {
             case HttpStatusCode.Created:
-                return TimeSeriesDataCreation.Accepted;
+                var created = await response.Content.ReadFromJsonAsync<TimeSeriesDataResponse>()
+                    ?? throw new InvalidOperationException(
+                        "The system accepted the time series data without returning the created entry.");
+
+                return new TimeSeriesDataAccepted(created.Id);
 
             case HttpStatusCode.BadRequest or HttpStatusCode.Conflict:
                 var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
@@ -40,12 +48,30 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
                         $"{await response.Content.ReadAsStringAsync()}");
                 }
 
-                return new TimeSeriesDataCreation([.. errorCodes.Select(ToRejectionReason)]);
+                return new TimeSeriesDataRejected([.. errorCodes.Select(ToRejectionReason)]);
 
             default:
-                throw new InvalidOperationException(
-                    $"The system responded to the new time series data with {(int)response.StatusCode} " +
-                    $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+                throw UnexpectedResponse("the new time series data", response, await response.Content.ReadAsStringAsync());
+        }
+    }
+
+    public async Task<TimeSeriesDataEntryFetch> FetchByIdAsync(long id)
+    {
+        using var response = await host.Client.GetAsync($"/time-series-data/{id.ToString(CultureInfo.InvariantCulture)}");
+
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.OK:
+                var entry = await response.Content.ReadFromJsonAsync<TimeSeriesDataResponse>()
+                    ?? throw new InvalidOperationException("The system found the time series data entry, but returned nothing.");
+
+                return entry.ToTimeSeriesData();
+
+            case HttpStatusCode.NotFound:
+                return new TimeSeriesDataEntryNotFound(id);
+
+            default:
+                throw UnexpectedResponse($"the time series data entry with id {id}", response, await response.Content.ReadAsStringAsync());
         }
     }
 
@@ -78,9 +104,11 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
         var response = await host.Client.GetFromJsonAsync<List<TimeSeriesDataResponse>>(requestUri)
             ?? throw new InvalidOperationException("The system returned no time series data, not even an empty list.");
 
-        return [.. response.Select(item => new TimeSeriesData(
-            item.Timestamp, item.BiddingZone, item.Production, item.Consumption, item.CrossBorderFlow))];
+        return [.. response.Select(item => item.ToTimeSeriesData())];
     }
+
+    private static InvalidOperationException UnexpectedResponse(string subject, HttpResponseMessage response, string body) =>
+        new($"The system responded to {subject} with {(int)response.StatusCode} {response.StatusCode}: {body}");
 
     private static TimeSeriesDataRejectionReason ToRejectionReason(string errorCode) => errorCode switch
     {
@@ -102,9 +130,14 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
     private sealed record ProblemResponse(List<string>? ErrorCodes);
 
     private sealed record TimeSeriesDataResponse(
+        long Id,
         DateTimeOffset Timestamp,
         string BiddingZone,
         decimal Production,
         decimal Consumption,
-        decimal CrossBorderFlow);
+        decimal CrossBorderFlow)
+    {
+        public TimeSeriesData ToTimeSeriesData() =>
+            new(Id, Timestamp, BiddingZone, Production, Consumption, CrossBorderFlow);
+    }
 }

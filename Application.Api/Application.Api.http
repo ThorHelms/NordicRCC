@@ -20,6 +20,11 @@ Accept: application/json
 
 ###
 
+GET {{Application.Api_HostAddress}}/time-series-data/1
+Accept: application/json
+
+###
+
 POST {{Application.Api_HostAddress}}/time-series-data
 Content-Type: application/json
 Accept: application/json

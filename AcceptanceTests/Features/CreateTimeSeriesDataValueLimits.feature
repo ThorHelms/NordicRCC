@@ -12,10 +12,10 @@ Scenario Outline: An entry at the limits is accepted
   When the following time series data entry is created
     | Timestamp            | Bidding zone | Production   | Consumption   | Cross-border flow   |
     | 2026-11-17T10:00:00Z | DK1          | <Production> | <Consumption> | <Cross-border flow> |
-  Then the time series data entry is accepted
+  Then the time series data entry is accepted and given a new id
   And the system holds the following time series data
-    | Timestamp            | Bidding zone | Production   | Consumption   | Cross-border flow   |
-    | 2026-11-17T10:00:00Z | DK1          | <Production> | <Consumption> | <Cross-border flow> |
+    | Id         | Timestamp            | Bidding zone | Production   | Consumption   | Cross-border flow   |
+    | the new id | 2026-11-17T10:00:00Z | DK1          | <Production> | <Consumption> | <Cross-border flow> |
 
   Examples:
     | Case                 | Production | Consumption | Cross-border flow |

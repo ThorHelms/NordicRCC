@@ -20,11 +20,16 @@ public enum TimeSeriesDataRejectionReason
 }
 
 /// <summary>
-/// The outcome of creating a time series data entry. The entry was accepted when there are no rejection reasons.
+/// The system accepted the new time series data entry, and gave it the id <paramref name="Id"/>.
 /// </summary>
-public sealed record TimeSeriesDataCreation(IReadOnlyList<TimeSeriesDataRejectionReason> RejectionReasons)
-{
-    public static TimeSeriesDataCreation Accepted { get; } = new([]);
+public sealed record TimeSeriesDataAccepted(long Id);
 
-    public bool IsAccepted => RejectionReasons.Count == 0;
-}
+/// <summary>
+/// The system rejected the new time series data entry. There is always at least one reason.
+/// </summary>
+public sealed record TimeSeriesDataRejected(IReadOnlyList<TimeSeriesDataRejectionReason> Reasons);
+
+/// <summary>
+/// The outcome of creating a time series data entry.
+/// </summary>
+public union TimeSeriesDataCreation(TimeSeriesDataAccepted, TimeSeriesDataRejected);

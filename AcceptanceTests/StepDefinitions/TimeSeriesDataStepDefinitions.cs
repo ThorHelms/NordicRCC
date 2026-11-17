@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using NordicRCC.AcceptanceTests.Drivers;
 using Reqnroll;
@@ -7,6 +8,11 @@ namespace NordicRCC.AcceptanceTests.StepDefinitions;
 [Binding]
 public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeriesData)
 {
+    /// <summary>
+    /// An id cell with this text stands for the id that the system gave the entry created in the scenario.
+    /// </summary>
+    private const string NewId = "the new id";
+
     private static readonly Dictionary<string, TimeSeriesDataRejectionReason> RejectionReasons = new()
     {
         ["the timestamp is missing"] = TimeSeriesDataRejectionReason.TimestampMissing,
@@ -28,6 +34,7 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     };
 
     private IReadOnlyList<TimeSeriesData> _fetched = [];
+    private TimeSeriesDataEntryFetch? _fetchedEntry;
     private TimeSeriesDataCreation? _creation;
 
     [Given("the following time series data has been recorded")]
@@ -41,16 +48,8 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     }
 
     [When("the following time series data entry is created")]
-    public async Task WhenTheFollowingTimeSeriesDataEntryIsCreated(DataTable table)
-    {
-        if (table.Rows.Count != 1)
-        {
-            throw new ArgumentException(
-                $"The step creates one time series data entry, but its table has {table.Rows.Count} rows.");
-        }
-
-        _creation = await timeSeriesData.CreateAsync(ParseNew(table.Rows[0]));
-    }
+    public async Task WhenTheFollowingTimeSeriesDataEntryIsCreated(DataTable table) =>
+        _creation = await timeSeriesData.CreateAsync(ParseNew(SingleRow(table, "creates")));
 
     [When("all time series data is fetched")]
     public async Task WhenAllTimeSeriesDataIsFetched() => _fetched = await timeSeriesData.FetchAllAsync();
@@ -71,6 +70,14 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     public async Task WhenTheTimeSeriesDataUpToIsFetched(string to) =>
         _fetched = await timeSeriesData.FetchForPeriodAsync(from: null, ParseTimestamp(to));
 
+    [When("the time series data entry with id {long} is fetched")]
+    public async Task WhenTheTimeSeriesDataEntryWithIdIsFetched(long id) =>
+        _fetchedEntry = await timeSeriesData.FetchByIdAsync(id);
+
+    [When("the time series data entry with the new id is fetched")]
+    public async Task WhenTheTimeSeriesDataEntryWithTheNewIdIsFetched() =>
+        _fetchedEntry = await timeSeriesData.FetchByIdAsync(CreatedId);
+
     [Then("the following time series data is returned")]
     public async Task ThenTheFollowingTimeSeriesDataIsReturned(DataTable table)
     {
@@ -81,9 +88,45 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     [Then("no time series data is returned")]
     public async Task ThenNoTimeSeriesDataIsReturned() => await Assert.That(_fetched).IsEmpty();
 
-    [Then("the time series data entry is accepted")]
-    public async Task ThenTheTimeSeriesDataEntryIsAccepted() =>
-        await Assert.That(Creation.RejectionReasons).IsEmpty();
+    [Then("the following time series data entry is returned")]
+    public async Task ThenTheFollowingTimeSeriesDataEntryIsReturned(DataTable table)
+    {
+        var expected = ParseRow(SingleRow(table, "returns"));
+
+        var entry = FetchedEntry switch
+        {
+            TimeSeriesData found => found,
+            TimeSeriesDataEntryNotFound notFound =>
+                Fail<TimeSeriesData>($"No time series data entry with id {notFound.Id} was found."),
+        };
+
+        await Assert.That(entry).IsEqualTo(expected);
+    }
+
+    [Then("no time series data entry is found")]
+    public async Task ThenNoTimeSeriesDataEntryIsFound()
+    {
+        var found = FetchedEntry switch
+        {
+            TimeSeriesData entry => entry,
+            TimeSeriesDataEntryNotFound => null,
+        };
+
+        await Assert.That(found).IsNull();
+    }
+
+    [Then("the time series data entry is accepted and given a new id")]
+    public async Task ThenTheTimeSeriesDataEntryIsAcceptedAndGivenANewId()
+    {
+        IReadOnlyList<TimeSeriesDataRejectionReason> rejectionReasons = Creation switch
+        {
+            TimeSeriesDataAccepted => [],
+            TimeSeriesDataRejected rejected => rejected.Reasons,
+        };
+
+        // That no other entry has the id is checked by the steps that look at the data that the system holds.
+        await Assert.That(rejectionReasons).IsEmpty();
+    }
 
     [Then("the time series data entry is rejected because {string}")]
     public async Task ThenTheTimeSeriesDataEntryIsRejectedBecause(string reason)
@@ -94,7 +137,14 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
                 $"'{reason}' isn't a known rejection reason. Known reasons: {string.Join("; ", RejectionReasons.Keys)}.");
         }
 
-        await Assert.That(Creation.RejectionReasons).IsEquivalentTo([expected]);
+        var reasons = Creation switch
+        {
+            TimeSeriesDataAccepted accepted => Fail<IReadOnlyList<TimeSeriesDataRejectionReason>>(
+                $"The time series data entry was accepted and given id {accepted.Id}."),
+            TimeSeriesDataRejected rejected => rejected.Reasons,
+        };
+
+        await Assert.That(reasons).IsEquivalentTo([expected]);
     }
 
     [Then("the system holds the following time series data")]
@@ -111,6 +161,22 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     private TimeSeriesDataCreation Creation =>
         _creation ?? throw new InvalidOperationException("No time series data entry has been created in the scenario.");
 
+    private TimeSeriesDataEntryFetch FetchedEntry =>
+        _fetchedEntry ?? throw new InvalidOperationException("No time series data entry has been fetched in the scenario.");
+
+    private long CreatedId => Creation switch
+    {
+        TimeSeriesDataAccepted accepted => accepted.Id,
+        TimeSeriesDataRejected rejected => throw new InvalidOperationException(
+            $"The scenario refers to {NewId}, but the created entry was rejected: {string.Join(", ", rejected.Reasons)}."),
+    };
+
+    private static DataTableRow SingleRow(DataTable table, string verb) =>
+        table.Rows.Count == 1
+            ? table.Rows[0]
+            : throw new ArgumentException(
+                $"The step {verb} one time series data entry, but its table has {table.Rows.Count} rows.");
+
     // An empty cell leaves the value out of the entry.
     private static NewTimeSeriesData ParseNew(DataTableRow row) =>
         new(
@@ -126,19 +192,30 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
 
     private static decimal ParseDecimal(string value) => decimal.Parse(value, CultureInfo.InvariantCulture);
 
-    private static List<TimeSeriesData> Parse(DataTable table) =>
-    [
-        .. table.Rows.Select(row => new TimeSeriesData(
+    private List<TimeSeriesData> Parse(DataTable table) => [.. table.Rows.Select(ParseRow)];
+
+    private TimeSeriesData ParseRow(DataTableRow row) =>
+        new(
+            ParseId(row["Id"]),
             ParseTimestamp(row["Timestamp"]),
             row["Bidding zone"],
-            decimal.Parse(row["Production"], CultureInfo.InvariantCulture),
-            decimal.Parse(row["Consumption"], CultureInfo.InvariantCulture),
-            decimal.Parse(row["Cross-border flow"], CultureInfo.InvariantCulture))),
-    ];
+            ParseDecimal(row["Production"]),
+            ParseDecimal(row["Consumption"]),
+            ParseDecimal(row["Cross-border flow"]));
+
+    // "the new id" stands for the id that the system gave the entry created in the scenario.
+    private long ParseId(string value) =>
+        value == NewId ? CreatedId : long.Parse(value, CultureInfo.InvariantCulture);
 
     private static DateTimeOffset ParseTimestamp(string value) =>
         DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);
 
     private static List<TimeSeriesData> InOrder(IEnumerable<TimeSeriesData> data) =>
         [.. data.OrderBy(item => item.Timestamp).ThenBy(item => item.BiddingZone, StringComparer.Ordinal)];
+
+    private static T Fail<T>(string message)
+    {
+        Assert.Fail(message);
+        throw new UnreachableException();
+    }
 }

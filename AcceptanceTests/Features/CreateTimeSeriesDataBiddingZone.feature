@@ -11,7 +11,10 @@ Scenario Outline: An entry for a Nordic bidding zone is accepted
   When the following time series data entry is created
     | Timestamp            | Bidding zone   | Production | Consumption | Cross-border flow |
     | 2026-11-17T10:00:00Z | <Bidding zone> | 1000.00    | 900.00      | -100.00           |
-  Then the time series data entry is accepted
+  Then the time series data entry is accepted and given a new id
+  And the system holds the following time series data
+    | Id         | Timestamp            | Bidding zone   | Production | Consumption | Cross-border flow |
+    | the new id | 2026-11-17T10:00:00Z | <Bidding zone> | 1000.00    | 900.00      | -100.00           |
 
   Examples:
     | Bidding zone |
