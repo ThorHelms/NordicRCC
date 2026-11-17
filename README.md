@@ -49,3 +49,22 @@ dotnet test
 ```
 
 The acceptance tests are written in Gherkin (`AcceptanceTests/Features`) using Reqnroll and TUnit, and host the API in memory, so nothing needs to be running beforehand.
+
+## Development notes
+
+During development, some assumptions were made, largely regarding the domain. These include the following:
+
+- Time series data can be expressed as a single entity
+- Cross-border electricity flow can be expressed as a single value
+- Only some bidding zones are legal values in the system
+
+Noteworthy architecture details:
+
+- Three layer architecture, with basically input (Application.Api), logic (Domain), and output (Infrastructure)
+- Testing with Gherkin feature files, via ReqNRoll
+- In-memory database for now, to make it easier to run the system
+- I have assumed a SQL database is used, with Entity Framework Core as ORM
+
+As a final note: The system has been developed with the help of an AI, but the architecture and development process follows my personal
+preferences regardless. In particular, the development process is Acceptance Test Driven Development, where the tests are writting in Gherkin
+before any implementation, and the test implementation is following the _protocol driver_ pattern.
