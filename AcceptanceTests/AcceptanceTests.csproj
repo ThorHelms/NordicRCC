@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Reqnroll.TUnit" Version="3.3.4" />
+    <PackageReference Include="TUnit" Version="1.86.0" />
+  </ItemGroup>
+
+</Project>
