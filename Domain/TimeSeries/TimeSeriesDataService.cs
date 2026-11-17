@@ -30,4 +30,37 @@ public sealed class TimeSeriesDataService(INordicRccDbContext database) : ITimeS
             .ThenBy(data => data.BiddingZone)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<CreateTimeSeriesDataResult> CreateAsync(
+        NewTimeSeriesData data,
+        CancellationToken cancellationToken = default)
+    {
+        var errors = TimeSeriesDataValidator.Validate(data);
+
+        if (errors.Count > 0)
+        {
+            return new TimeSeriesDataValidationFailed(errors);
+        }
+
+        var entry = new TimeSeriesData(
+            data.Timestamp!.Value,
+            data.BiddingZone!,
+            data.Production!.Value,
+            data.Consumption!.Value,
+            data.CrossBorderFlow!.Value);
+
+        var alreadyExists = await database.TimeSeriesData.AnyAsync(
+            existing => existing.BiddingZone == entry.BiddingZone && existing.Timestamp == entry.Timestamp,
+            cancellationToken);
+
+        if (alreadyExists)
+        {
+            return new TimeSeriesDataValidationFailed([TimeSeriesDataValidationError.AlreadyExists]);
+        }
+
+        database.TimeSeriesData.Add(entry);
+        await database.SaveChangesAsync(cancellationToken);
+
+        return entry;
+    }
 }

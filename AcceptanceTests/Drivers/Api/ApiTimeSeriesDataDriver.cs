@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using NordicRCC.Domain;
@@ -8,7 +9,7 @@ namespace NordicRCC.AcceptanceTests.Drivers.Api;
 
 public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDriver
 {
-    // Users can't add time series data through the system, so it's stored in the database directly.
+    // Recorded data comes from an external source, not from users, so it's stored in the database directly.
     public async Task RecordAsync(IEnumerable<TimeSeriesData> data)
     {
         using var scope = host.Services.CreateScope();
@@ -18,6 +19,34 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
             item.Timestamp, item.BiddingZone, item.Production, item.Consumption, item.CrossBorderFlow)));
 
         await database.SaveChangesAsync();
+    }
+
+    public async Task<TimeSeriesDataCreation> CreateAsync(NewTimeSeriesData data)
+    {
+        using var response = await host.Client.PostAsJsonAsync("/time-series-data", data);
+
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.Created:
+                return TimeSeriesDataCreation.Accepted;
+
+            case HttpStatusCode.BadRequest or HttpStatusCode.Conflict:
+                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+
+                if (problem?.ErrorCodes is not { Count: > 0 } errorCodes)
+                {
+                    throw new InvalidOperationException(
+                        $"The system rejected the time series data without saying why: " +
+                        $"{await response.Content.ReadAsStringAsync()}");
+                }
+
+                return new TimeSeriesDataCreation([.. errorCodes.Select(ToRejectionReason)]);
+
+            default:
+                throw new InvalidOperationException(
+                    $"The system responded to the new time series data with {(int)response.StatusCode} " +
+                    $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        }
     }
 
     public Task<IReadOnlyList<TimeSeriesData>> FetchAllAsync() => FetchAsync("/time-series-data");
@@ -52,6 +81,25 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
         return [.. response.Select(item => new TimeSeriesData(
             item.Timestamp, item.BiddingZone, item.Production, item.Consumption, item.CrossBorderFlow))];
     }
+
+    private static TimeSeriesDataRejectionReason ToRejectionReason(string errorCode) => errorCode switch
+    {
+        "TimestampMissing" => TimeSeriesDataRejectionReason.TimestampMissing,
+        "BiddingZoneMissing" => TimeSeriesDataRejectionReason.BiddingZoneMissing,
+        "ProductionMissing" => TimeSeriesDataRejectionReason.ProductionMissing,
+        "ConsumptionMissing" => TimeSeriesDataRejectionReason.ConsumptionMissing,
+        "CrossBorderFlowMissing" => TimeSeriesDataRejectionReason.CrossBorderFlowMissing,
+        "BiddingZoneUnknown" => TimeSeriesDataRejectionReason.BiddingZoneUnknown,
+        "ProductionNegative" => TimeSeriesDataRejectionReason.ProductionNegative,
+        "ConsumptionNegative" => TimeSeriesDataRejectionReason.ConsumptionNegative,
+        "ProductionTooManyDecimalPlaces" => TimeSeriesDataRejectionReason.ProductionTooManyDecimalPlaces,
+        "ConsumptionTooManyDecimalPlaces" => TimeSeriesDataRejectionReason.ConsumptionTooManyDecimalPlaces,
+        "CrossBorderFlowTooManyDecimalPlaces" => TimeSeriesDataRejectionReason.CrossBorderFlowTooManyDecimalPlaces,
+        "AlreadyExists" => TimeSeriesDataRejectionReason.AlreadyExists,
+        _ => throw new InvalidOperationException($"The system rejected the time series data for an unknown reason: {errorCode}."),
+    };
+
+    private sealed record ProblemResponse(List<string>? ErrorCodes);
 
     private sealed record TimeSeriesDataResponse(
         DateTimeOffset Timestamp,

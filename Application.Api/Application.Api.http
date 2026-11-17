@@ -19,3 +19,17 @@ GET {{Application.Api_HostAddress}}/time-series-data?from=2026-11-17T11:00:00Z&t
 Accept: application/json
 
 ###
+
+POST {{Application.Api_HostAddress}}/time-series-data
+Content-Type: application/json
+Accept: application/json
+
+{
+  "timestamp": "2026-11-17T10:00:00Z",
+  "biddingZone": "NO1",
+  "production": 4512.75,
+  "consumption": 3980.20,
+  "crossBorderFlow": -532.55
+}
+
+###

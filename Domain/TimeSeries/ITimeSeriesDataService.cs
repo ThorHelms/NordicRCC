@@ -8,4 +8,12 @@ public interface ITimeSeriesDataService
     Task<IReadOnlyList<TimeSeriesData>> GetAsync(
         TimeSeriesDataFilter filter,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a time series data entry, if it is valid. A rejected entry leaves the data that the system
+    /// holds unchanged.
+    /// </summary>
+    Task<CreateTimeSeriesDataResult> CreateAsync(
+        NewTimeSeriesData data,
+        CancellationToken cancellationToken = default);
 }

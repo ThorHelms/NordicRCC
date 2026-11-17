@@ -7,6 +7,11 @@ public interface ITimeSeriesDataDriver
     /// </summary>
     Task RecordAsync(IEnumerable<TimeSeriesData> data);
 
+    /// <summary>
+    /// Creates a time series data entry through the system, which accepts or rejects it.
+    /// </summary>
+    Task<TimeSeriesDataCreation> CreateAsync(NewTimeSeriesData data);
+
     Task<IReadOnlyList<TimeSeriesData>> FetchAllAsync();
 
     Task<IReadOnlyList<TimeSeriesData>> FetchForBiddingZoneAsync(string biddingZone);
