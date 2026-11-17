@@ -1,7 +1,7 @@
 namespace NordicRCC.Domain.TimeSeries;
 
 /// <summary>
-/// The reasons why a new time series data entry was rejected. There is always at least one.
+/// The reasons why a new time series data entry, or an update of one, was rejected. There is always at least one.
 /// </summary>
 public sealed record TimeSeriesDataValidationFailed(IReadOnlyList<TimeSeriesDataValidationError> Errors);
 

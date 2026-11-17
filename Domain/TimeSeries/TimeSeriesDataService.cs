@@ -72,4 +72,40 @@ public sealed class TimeSeriesDataService(INordicRccDbContext database) : ITimeS
 
         return entry;
     }
+
+    public async Task<UpdateTimeSeriesDataResult> UpdateAsync(
+        long id,
+        UpdatedTimeSeriesData data,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await database.TimeSeriesData
+            .AsNoTracking()
+            .SingleOrDefaultAsync(entry => entry.Id == id, cancellationToken);
+
+        if (existing is null)
+        {
+            return new TimeSeriesDataNotFound(id);
+        }
+
+        var errors = TimeSeriesDataValidator.Validate(data);
+
+        if (errors.Count > 0)
+        {
+            return new TimeSeriesDataValidationFailed(errors);
+        }
+
+        // The entry is immutable, so a copy with the new values replaces it. The copy keeps the id, timestamp and
+        // bidding zone of the existing entry.
+        var updated = existing with
+        {
+            Production = data.Production!.Value,
+            Consumption = data.Consumption!.Value,
+            CrossBorderFlow = data.CrossBorderFlow!.Value,
+        };
+
+        database.TimeSeriesData.Update(updated);
+        await database.SaveChangesAsync(cancellationToken);
+
+        return updated;
+    }
 }

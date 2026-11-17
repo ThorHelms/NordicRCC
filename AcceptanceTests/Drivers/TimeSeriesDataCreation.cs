@@ -1,7 +1,7 @@
 namespace NordicRCC.AcceptanceTests.Drivers;
 
 /// <summary>
-/// A reason why the system rejected a new time series data entry.
+/// A reason why the system rejected a new time series data entry, or an update of one.
 /// </summary>
 public enum TimeSeriesDataRejectionReason
 {
@@ -25,7 +25,7 @@ public enum TimeSeriesDataRejectionReason
 public sealed record TimeSeriesDataAccepted(long Id);
 
 /// <summary>
-/// The system rejected the new time series data entry. There is always at least one reason.
+/// The system rejected the new time series data entry, or the update of one. There is always at least one reason.
 /// </summary>
 public sealed record TimeSeriesDataRejected(IReadOnlyList<TimeSeriesDataRejectionReason> Reasons);
 

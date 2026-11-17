@@ -36,6 +36,12 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     private IReadOnlyList<TimeSeriesData> _fetched = [];
     private TimeSeriesDataEntryFetch? _fetchedEntry;
     private TimeSeriesDataCreation? _creation;
+    private TimeSeriesDataUpdate? _update;
+
+    /// <summary>
+    /// Whether the latest step that looked up an entry by its id, by fetching or updating it, found the entry.
+    /// </summary>
+    private bool? _entryFound;
 
     [Given("the following time series data has been recorded")]
     public Task GivenTheFollowingTimeSeriesDataHasBeenRecorded(DataTable table) =>
@@ -71,12 +77,23 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
         _fetched = await timeSeriesData.FetchForPeriodAsync(from: null, ParseTimestamp(to));
 
     [When("the time series data entry with id {long} is fetched")]
-    public async Task WhenTheTimeSeriesDataEntryWithIdIsFetched(long id) =>
-        _fetchedEntry = await timeSeriesData.FetchByIdAsync(id);
+    public Task WhenTheTimeSeriesDataEntryWithIdIsFetched(long id) => FetchEntryAsync(id);
 
     [When("the time series data entry with the new id is fetched")]
-    public async Task WhenTheTimeSeriesDataEntryWithTheNewIdIsFetched() =>
-        _fetchedEntry = await timeSeriesData.FetchByIdAsync(CreatedId);
+    public Task WhenTheTimeSeriesDataEntryWithTheNewIdIsFetched() => FetchEntryAsync(CreatedId);
+
+    [When("the time series data entry with id {long} is updated with the following values")]
+    public async Task WhenTheTimeSeriesDataEntryWithIdIsUpdatedWithTheFollowingValues(long id, DataTable table)
+    {
+        var update = await timeSeriesData.UpdateAsync(id, ParseUpdated(SingleRow(table, "updates")));
+
+        _update = update;
+        _entryFound = update switch
+        {
+            TimeSeriesData or TimeSeriesDataRejected => true,
+            TimeSeriesDataEntryNotFound => false,
+        };
+    }
 
     [Then("the following time series data is returned")]
     public async Task ThenTheFollowingTimeSeriesDataIsReturned(DataTable table)
@@ -106,13 +123,42 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     [Then("no time series data entry is found")]
     public async Task ThenNoTimeSeriesDataEntryIsFound()
     {
-        var found = FetchedEntry switch
+        var found = _entryFound
+            ?? throw new InvalidOperationException("No time series data entry has been looked up in the scenario.");
+
+        await Assert.That(found).IsFalse();
+    }
+
+    [Then("the update of the time series data entry is accepted")]
+    public async Task ThenTheUpdateOfTheTimeSeriesDataEntryIsAccepted()
+    {
+        IReadOnlyList<TimeSeriesDataRejectionReason> rejectionReasons = Update switch
         {
-            TimeSeriesData entry => entry,
-            TimeSeriesDataEntryNotFound => null,
+            TimeSeriesData => [],
+            TimeSeriesDataRejected rejected => rejected.Reasons,
+            TimeSeriesDataEntryNotFound notFound => Fail<IReadOnlyList<TimeSeriesDataRejectionReason>>(
+                $"No time series data entry with id {notFound.Id} was found to update."),
         };
 
-        await Assert.That(found).IsNull();
+        // That the entry holds the new values is checked by the steps that look at the data that the system holds.
+        await Assert.That(rejectionReasons).IsEmpty();
+    }
+
+    [Then("the update of the time series data entry is rejected because {string}")]
+    public async Task ThenTheUpdateOfTheTimeSeriesDataEntryIsRejectedBecause(string reason)
+    {
+        var expected = RejectionReason(reason);
+
+        var reasons = Update switch
+        {
+            TimeSeriesData updated => Fail<IReadOnlyList<TimeSeriesDataRejectionReason>>(
+                $"The update of the time series data entry with id {updated.Id} was accepted."),
+            TimeSeriesDataRejected rejected => rejected.Reasons,
+            TimeSeriesDataEntryNotFound notFound => Fail<IReadOnlyList<TimeSeriesDataRejectionReason>>(
+                $"No time series data entry with id {notFound.Id} was found to update."),
+        };
+
+        await Assert.That(reasons).IsEquivalentTo([expected]);
     }
 
     [Then("the time series data entry is accepted and given a new id")]
@@ -131,11 +177,7 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     [Then("the time series data entry is rejected because {string}")]
     public async Task ThenTheTimeSeriesDataEntryIsRejectedBecause(string reason)
     {
-        if (!RejectionReasons.TryGetValue(reason, out var expected))
-        {
-            throw new ArgumentException(
-                $"'{reason}' isn't a known rejection reason. Known reasons: {string.Join("; ", RejectionReasons.Keys)}.");
-        }
+        var expected = RejectionReason(reason);
 
         var reasons = Creation switch
         {
@@ -164,6 +206,27 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     private TimeSeriesDataEntryFetch FetchedEntry =>
         _fetchedEntry ?? throw new InvalidOperationException("No time series data entry has been fetched in the scenario.");
 
+    private TimeSeriesDataUpdate Update =>
+        _update ?? throw new InvalidOperationException("No time series data entry has been updated in the scenario.");
+
+    private async Task FetchEntryAsync(long id)
+    {
+        var entry = await timeSeriesData.FetchByIdAsync(id);
+
+        _fetchedEntry = entry;
+        _entryFound = entry switch
+        {
+            TimeSeriesData => true,
+            TimeSeriesDataEntryNotFound => false,
+        };
+    }
+
+    private static TimeSeriesDataRejectionReason RejectionReason(string reason) =>
+        RejectionReasons.TryGetValue(reason, out var expected)
+            ? expected
+            : throw new ArgumentException(
+                $"'{reason}' isn't a known rejection reason. Known reasons: {string.Join("; ", RejectionReasons.Keys)}.");
+
     private long CreatedId => Creation switch
     {
         TimeSeriesDataAccepted accepted => accepted.Id,
@@ -182,6 +245,13 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
         new(
             OrNull(row["Timestamp"], ParseTimestamp),
             string.IsNullOrWhiteSpace(row["Bidding zone"]) ? null : row["Bidding zone"],
+            OrNull(row["Production"], ParseDecimal),
+            OrNull(row["Consumption"], ParseDecimal),
+            OrNull(row["Cross-border flow"], ParseDecimal));
+
+    // An empty cell leaves the value out of the update.
+    private static UpdatedTimeSeriesData ParseUpdated(DataTableRow row) =>
+        new(
             OrNull(row["Production"], ParseDecimal),
             OrNull(row["Consumption"], ParseDecimal),
             OrNull(row["Cross-border flow"], ParseDecimal));

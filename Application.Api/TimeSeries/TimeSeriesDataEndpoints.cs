@@ -26,6 +26,9 @@ public static class TimeSeriesDataEndpoints
             .WithName("CreateTimeSeriesData")
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        endpoints.MapPut("/time-series-data/{id:long}", UpdateTimeSeriesDataAsync)
+            .WithName("UpdateTimeSeriesData");
+
         return endpoints;
     }
 
@@ -49,12 +52,7 @@ public static class TimeSeriesDataEndpoints
         return result switch
         {
             TimeSeriesData entry => TypedResults.Ok(TimeSeriesDataDto.From(entry)),
-            TimeSeriesDataNotFound notFound => TypedResults.NotFound(new ProblemDetails
-            {
-                Title = "The time series data was not found.",
-                Detail = $"There is no time series data entry with id {notFound.Id}.",
-                Status = StatusCodes.Status404NotFound,
-            }),
+            TimeSeriesDataNotFound notFound => NotFound(notFound),
         };
     }
 
@@ -72,28 +70,44 @@ public static class TimeSeriesDataEndpoints
                 TimeSeriesDataDto.From(created),
                 GetTimeSeriesDataByIdRoute,
                 new { id = created.Id }),
-            TimeSeriesDataValidationFailed failed => ToProblem(failed),
+            // A duplicate entry is valid on its own, but conflicts with the data that the system already holds.
+            TimeSeriesDataValidationFailed { Errors: [TimeSeriesDataValidationError.AlreadyExists] } failed =>
+                TypedResults.Problem(
+                    title: "The time series data already exists.",
+                    detail: Describe(TimeSeriesDataValidationError.AlreadyExists).Message,
+                    statusCode: StatusCodes.Status409Conflict,
+                    extensions: ErrorCodes(failed)),
+            TimeSeriesDataValidationFailed failed => ToValidationProblem(failed),
         };
     }
 
-    private static Results<CreatedAtRoute<TimeSeriesDataDto>, ValidationProblem, ProblemHttpResult> ToProblem(
-        TimeSeriesDataValidationFailed failed)
+    private static async Task<Results<Ok<TimeSeriesDataDto>, ValidationProblem, NotFound<ProblemDetails>>>
+        UpdateTimeSeriesDataAsync(
+            long id,
+            UpdateTimeSeriesDataRequest request,
+            ITimeSeriesDataService timeSeriesData,
+            CancellationToken cancellationToken)
     {
-        var extensions = new Dictionary<string, object?>
+        var result = await timeSeriesData.UpdateAsync(id, request.ToUpdatedTimeSeriesData(), cancellationToken);
+
+        return result switch
         {
-            [ErrorCodesExtension] = failed.Errors.Select(error => error.ToString()).ToArray(),
+            TimeSeriesData updated => TypedResults.Ok(TimeSeriesDataDto.From(updated)),
+            TimeSeriesDataValidationFailed failed => ToValidationProblem(failed),
+            TimeSeriesDataNotFound notFound => NotFound(notFound),
         };
+    }
 
-        // A duplicate entry is valid on its own, but conflicts with the data that the system already holds.
-        if (failed.Errors is [TimeSeriesDataValidationError.AlreadyExists])
+    private static NotFound<ProblemDetails> NotFound(TimeSeriesDataNotFound notFound) =>
+        TypedResults.NotFound(new ProblemDetails
         {
-            return TypedResults.Problem(
-                title: "The time series data already exists.",
-                detail: Describe(TimeSeriesDataValidationError.AlreadyExists).Message,
-                statusCode: StatusCodes.Status409Conflict,
-                extensions: extensions);
-        }
+            Title = "The time series data was not found.",
+            Detail = $"There is no time series data entry with id {notFound.Id}.",
+            Status = StatusCodes.Status404NotFound,
+        });
 
+    private static ValidationProblem ToValidationProblem(TimeSeriesDataValidationFailed failed)
+    {
         var errors = failed.Errors
             .Select(Describe)
             .GroupBy(error => error.Field, error => error.Message)
@@ -102,8 +116,14 @@ public static class TimeSeriesDataEndpoints
         return TypedResults.ValidationProblem(
             errors,
             title: "The time series data is invalid.",
-            extensions: extensions);
+            extensions: ErrorCodes(failed));
     }
+
+    private static Dictionary<string, object?> ErrorCodes(TimeSeriesDataValidationFailed failed) =>
+        new()
+        {
+            [ErrorCodesExtension] = failed.Errors.Select(error => error.ToString()).ToArray(),
+        };
 
     private static (string Field, string Message) Describe(TimeSeriesDataValidationError error) => error switch
     {

@@ -38,3 +38,15 @@ Accept: application/json
 }
 
 ###
+
+PUT {{Application.Api_HostAddress}}/time-series-data/1
+Content-Type: application/json
+Accept: application/json
+
+{
+  "production": 4601.10,
+  "consumption": 4015.00,
+  "crossBorderFlow": -586.10
+}
+
+###

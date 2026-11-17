@@ -1,8 +1,8 @@
 namespace NordicRCC.Domain.TimeSeries;
 
 /// <summary>
-/// Checks the rules that a new time series data entry must follow on its own, without looking at the data
-/// that the system already holds.
+/// Checks the rules that a new time series data entry, or an update of one, must follow on its own, without
+/// looking at the data that the system already holds.
 /// </summary>
 public static class TimeSeriesDataValidator
 {
@@ -29,7 +29,27 @@ public static class TimeSeriesDataValidator
             errors.Add(TimeSeriesDataValidationError.BiddingZoneUnknown);
         }
 
-        switch (data.Production)
+        AddValueErrors(errors, data.Production, data.Consumption, data.CrossBorderFlow);
+
+        return errors;
+    }
+
+    public static IReadOnlyList<TimeSeriesDataValidationError> Validate(UpdatedTimeSeriesData data)
+    {
+        var errors = new List<TimeSeriesDataValidationError>();
+
+        AddValueErrors(errors, data.Production, data.Consumption, data.CrossBorderFlow);
+
+        return errors;
+    }
+
+    private static void AddValueErrors(
+        List<TimeSeriesDataValidationError> errors,
+        decimal? production,
+        decimal? consumption,
+        decimal? crossBorderFlow)
+    {
+        switch (production)
         {
             case null:
                 errors.Add(TimeSeriesDataValidationError.ProductionMissing);
@@ -39,12 +59,12 @@ public static class TimeSeriesDataValidator
                 break;
         }
 
-        if (HasTooManyDecimalPlaces(data.Production))
+        if (HasTooManyDecimalPlaces(production))
         {
             errors.Add(TimeSeriesDataValidationError.ProductionTooManyDecimalPlaces);
         }
 
-        switch (data.Consumption)
+        switch (consumption)
         {
             case null:
                 errors.Add(TimeSeriesDataValidationError.ConsumptionMissing);
@@ -54,21 +74,19 @@ public static class TimeSeriesDataValidator
                 break;
         }
 
-        if (HasTooManyDecimalPlaces(data.Consumption))
+        if (HasTooManyDecimalPlaces(consumption))
         {
             errors.Add(TimeSeriesDataValidationError.ConsumptionTooManyDecimalPlaces);
         }
 
-        if (data.CrossBorderFlow is null)
+        if (crossBorderFlow is null)
         {
             errors.Add(TimeSeriesDataValidationError.CrossBorderFlowMissing);
         }
-        else if (HasTooManyDecimalPlaces(data.CrossBorderFlow))
+        else if (HasTooManyDecimalPlaces(crossBorderFlow))
         {
             errors.Add(TimeSeriesDataValidationError.CrossBorderFlowTooManyDecimalPlaces);
         }
-
-        return errors;
     }
 
     // Trailing zeros don't count, so 3980.2000 has one decimal place.

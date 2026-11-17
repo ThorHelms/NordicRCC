@@ -17,6 +17,12 @@ public interface ITimeSeriesDataDriver
     /// </summary>
     Task<TimeSeriesDataEntryFetch> FetchByIdAsync(long id);
 
+    /// <summary>
+    /// Updates the time series data entry with the id through the system, which accepts or rejects the update,
+    /// and may not hold the entry.
+    /// </summary>
+    Task<TimeSeriesDataUpdate> UpdateAsync(long id, UpdatedTimeSeriesData data);
+
     Task<IReadOnlyList<TimeSeriesData>> FetchAllAsync();
 
     Task<IReadOnlyList<TimeSeriesData>> FetchForBiddingZoneAsync(string biddingZone);

@@ -1,7 +1,7 @@
 namespace NordicRCC.Domain.TimeSeries;
 
 /// <summary>
-/// A reason why a new time series data entry is rejected.
+/// A reason why a new time series data entry, or an update of one, is rejected.
 /// </summary>
 public enum TimeSeriesDataValidationError
 {

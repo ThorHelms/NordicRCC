@@ -21,4 +21,14 @@ public interface ITimeSeriesDataService
     Task<CreateTimeSeriesDataResult> CreateAsync(
         NewTimeSeriesData data,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the production, consumption and cross-border flow of the time series data entry with the id, if the
+    /// new values are valid. The timestamp, bidding zone and id of the entry stay as they were. A rejected update
+    /// leaves the data that the system holds unchanged.
+    /// </summary>
+    Task<UpdateTimeSeriesDataResult> UpdateAsync(
+        long id,
+        UpdatedTimeSeriesData data,
+        CancellationToken cancellationToken = default);
 }

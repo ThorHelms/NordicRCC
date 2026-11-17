@@ -39,20 +39,53 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
                 return new TimeSeriesDataAccepted(created.Id);
 
             case HttpStatusCode.BadRequest or HttpStatusCode.Conflict:
-                var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
-
-                if (problem?.ErrorCodes is not { Count: > 0 } errorCodes)
-                {
-                    throw new InvalidOperationException(
-                        $"The system rejected the time series data without saying why: " +
-                        $"{await response.Content.ReadAsStringAsync()}");
-                }
-
-                return new TimeSeriesDataRejected([.. errorCodes.Select(ToRejectionReason)]);
+                return await ReadRejectionAsync(response);
 
             default:
                 throw UnexpectedResponse("the new time series data", response, await response.Content.ReadAsStringAsync());
         }
+    }
+
+    public async Task<TimeSeriesDataUpdate> UpdateAsync(long id, UpdatedTimeSeriesData data)
+    {
+        using var response = await host.Client.PutAsJsonAsync(
+            $"/time-series-data/{id.ToString(CultureInfo.InvariantCulture)}", data);
+
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.OK:
+                var updated = await response.Content.ReadFromJsonAsync<TimeSeriesDataResponse>()
+                    ?? throw new InvalidOperationException(
+                        "The system accepted the update without returning the updated entry.");
+
+                return updated.ToTimeSeriesData();
+
+            case HttpStatusCode.BadRequest:
+                return await ReadRejectionAsync(response);
+
+            case HttpStatusCode.NotFound:
+                return new TimeSeriesDataEntryNotFound(id);
+
+            default:
+                throw UnexpectedResponse(
+                    $"the update of the time series data entry with id {id}",
+                    response,
+                    await response.Content.ReadAsStringAsync());
+        }
+    }
+
+    private static async Task<TimeSeriesDataRejected> ReadRejectionAsync(HttpResponseMessage response)
+    {
+        var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();
+
+        if (problem?.ErrorCodes is not { Count: > 0 } errorCodes)
+        {
+            throw new InvalidOperationException(
+                $"The system rejected the time series data without saying why: " +
+                $"{await response.Content.ReadAsStringAsync()}");
+        }
+
+        return new TimeSeriesDataRejected([.. errorCodes.Select(ToRejectionReason)]);
     }
 
     public async Task<TimeSeriesDataEntryFetch> FetchByIdAsync(long id)
