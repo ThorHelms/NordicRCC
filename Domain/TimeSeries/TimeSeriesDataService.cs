@@ -108,4 +108,20 @@ public sealed class TimeSeriesDataService(INordicRccDbContext database) : ITimeS
 
         return updated;
     }
+
+    public async Task<DeleteTimeSeriesDataResult> DeleteAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var existing = await database.TimeSeriesData
+            .SingleOrDefaultAsync(entry => entry.Id == id, cancellationToken);
+
+        if (existing is null)
+        {
+            return new TimeSeriesDataNotFound(id);
+        }
+
+        database.TimeSeriesData.Remove(existing);
+        await database.SaveChangesAsync(cancellationToken);
+
+        return new TimeSeriesDataDeleted(id);
+    }
 }

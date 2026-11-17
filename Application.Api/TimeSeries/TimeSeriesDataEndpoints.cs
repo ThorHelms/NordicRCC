@@ -29,6 +29,9 @@ public static class TimeSeriesDataEndpoints
         endpoints.MapPut("/time-series-data/{id:long}", UpdateTimeSeriesDataAsync)
             .WithName("UpdateTimeSeriesData");
 
+        endpoints.MapDelete("/time-series-data/{id:long}", DeleteTimeSeriesDataAsync)
+            .WithName("DeleteTimeSeriesData");
+
         return endpoints;
     }
 
@@ -94,6 +97,20 @@ public static class TimeSeriesDataEndpoints
         {
             TimeSeriesData updated => TypedResults.Ok(TimeSeriesDataDto.From(updated)),
             TimeSeriesDataValidationFailed failed => ToValidationProblem(failed),
+            TimeSeriesDataNotFound notFound => NotFound(notFound),
+        };
+    }
+
+    private static async Task<Results<NoContent, NotFound<ProblemDetails>>> DeleteTimeSeriesDataAsync(
+        long id,
+        ITimeSeriesDataService timeSeriesData,
+        CancellationToken cancellationToken)
+    {
+        var result = await timeSeriesData.DeleteAsync(id, cancellationToken);
+
+        return result switch
+        {
+            TimeSeriesDataDeleted => TypedResults.NoContent(),
             TimeSeriesDataNotFound notFound => NotFound(notFound),
         };
     }

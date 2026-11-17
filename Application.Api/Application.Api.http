@@ -50,3 +50,8 @@ Accept: application/json
 }
 
 ###
+
+DELETE {{Application.Api_HostAddress}}/time-series-data/1
+Accept: application/json
+
+###

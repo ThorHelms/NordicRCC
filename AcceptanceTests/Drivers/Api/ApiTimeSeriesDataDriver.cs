@@ -74,6 +74,22 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
         }
     }
 
+    public async Task<TimeSeriesDataDeletion> DeleteAsync(long id)
+    {
+        using var response = await host.Client.DeleteAsync(
+            $"/time-series-data/{id.ToString(CultureInfo.InvariantCulture)}");
+
+        return response.StatusCode switch
+        {
+            HttpStatusCode.NoContent => new TimeSeriesDataDeleted(id),
+            HttpStatusCode.NotFound => new TimeSeriesDataEntryNotFound(id),
+            _ => throw UnexpectedResponse(
+                $"the deletion of the time series data entry with id {id}",
+                response,
+                await response.Content.ReadAsStringAsync()),
+        };
+    }
+
     private static async Task<TimeSeriesDataRejected> ReadRejectionAsync(HttpResponseMessage response)
     {
         var problem = await response.Content.ReadFromJsonAsync<ProblemResponse>();

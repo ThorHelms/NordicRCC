@@ -23,6 +23,11 @@ public interface ITimeSeriesDataDriver
     /// </summary>
     Task<TimeSeriesDataUpdate> UpdateAsync(long id, UpdatedTimeSeriesData data);
 
+    /// <summary>
+    /// Deletes the time series data entry with the id through the system, which may not hold the entry.
+    /// </summary>
+    Task<TimeSeriesDataDeletion> DeleteAsync(long id);
+
     Task<IReadOnlyList<TimeSeriesData>> FetchAllAsync();
 
     Task<IReadOnlyList<TimeSeriesData>> FetchForBiddingZoneAsync(string biddingZone);

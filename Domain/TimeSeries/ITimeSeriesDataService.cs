@@ -31,4 +31,10 @@ public interface ITimeSeriesDataService
         long id,
         UpdatedTimeSeriesData data,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the time series data entry with the id, or returns <see cref="TimeSeriesDataNotFound"/> when there
+    /// is none. Deleting an entry leaves all other entries unchanged.
+    /// </summary>
+    Task<DeleteTimeSeriesDataResult> DeleteAsync(long id, CancellationToken cancellationToken = default);
 }

@@ -37,9 +37,11 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     private TimeSeriesDataEntryFetch? _fetchedEntry;
     private TimeSeriesDataCreation? _creation;
     private TimeSeriesDataUpdate? _update;
+    private TimeSeriesDataDeletion? _deletion;
 
     /// <summary>
-    /// Whether the latest step that looked up an entry by its id, by fetching or updating it, found the entry.
+    /// Whether the latest step that looked up an entry by its id, by fetching, updating or deleting it, found the
+    /// entry.
     /// </summary>
     private bool? _entryFound;
 
@@ -91,6 +93,19 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
         _entryFound = update switch
         {
             TimeSeriesData or TimeSeriesDataRejected => true,
+            TimeSeriesDataEntryNotFound => false,
+        };
+    }
+
+    [When("the time series data entry with id {long} is deleted")]
+    public async Task WhenTheTimeSeriesDataEntryWithIdIsDeleted(long id)
+    {
+        var deletion = await timeSeriesData.DeleteAsync(id);
+
+        _deletion = deletion;
+        _entryFound = deletion switch
+        {
+            TimeSeriesDataDeleted => true,
             TimeSeriesDataEntryNotFound => false,
         };
     }
@@ -161,6 +176,20 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
         await Assert.That(reasons).IsEquivalentTo([expected]);
     }
 
+    [Then("the deletion of the time series data entry is accepted")]
+    public async Task ThenTheDeletionOfTheTimeSeriesDataEntryIsAccepted()
+    {
+        var deleted = Deletion switch
+        {
+            TimeSeriesDataDeleted => true,
+            TimeSeriesDataEntryNotFound notFound =>
+                Fail<bool>($"No time series data entry with id {notFound.Id} was found to delete."),
+        };
+
+        // That the entry is gone is checked by the steps that look at the data that the system holds.
+        await Assert.That(deleted).IsTrue();
+    }
+
     [Then("the time series data entry is accepted and given a new id")]
     public async Task ThenTheTimeSeriesDataEntryIsAcceptedAndGivenANewId()
     {
@@ -208,6 +237,9 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
 
     private TimeSeriesDataUpdate Update =>
         _update ?? throw new InvalidOperationException("No time series data entry has been updated in the scenario.");
+
+    private TimeSeriesDataDeletion Deletion =>
+        _deletion ?? throw new InvalidOperationException("No time series data entry has been deleted in the scenario.");
 
     private async Task FetchEntryAsync(long id)
     {
