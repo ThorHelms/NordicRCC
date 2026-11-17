@@ -26,6 +26,18 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     public async Task WhenTheTimeSeriesDataForBiddingZoneIsFetched(string biddingZone) =>
         _fetched = await timeSeriesData.FetchForBiddingZoneAsync(biddingZone);
 
+    [When("the time series data from {string} to {string} is fetched")]
+    public async Task WhenTheTimeSeriesDataFromToIsFetched(string from, string to) =>
+        _fetched = await timeSeriesData.FetchForPeriodAsync(ParseTimestamp(from), ParseTimestamp(to));
+
+    [When("the time series data from {string} is fetched")]
+    public async Task WhenTheTimeSeriesDataFromIsFetched(string from) =>
+        _fetched = await timeSeriesData.FetchForPeriodAsync(ParseTimestamp(from), to: null);
+
+    [When("the time series data up to {string} is fetched")]
+    public async Task WhenTheTimeSeriesDataUpToIsFetched(string to) =>
+        _fetched = await timeSeriesData.FetchForPeriodAsync(from: null, ParseTimestamp(to));
+
     [Then("the following time series data is returned")]
     public async Task ThenTheFollowingTimeSeriesDataIsReturned(DataTable table)
     {
@@ -39,12 +51,15 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     private static List<TimeSeriesData> Parse(DataTable table) =>
     [
         .. table.Rows.Select(row => new TimeSeriesData(
-            DateTimeOffset.Parse(row["Timestamp"], CultureInfo.InvariantCulture),
+            ParseTimestamp(row["Timestamp"]),
             row["Bidding zone"],
             decimal.Parse(row["Production"], CultureInfo.InvariantCulture),
             decimal.Parse(row["Consumption"], CultureInfo.InvariantCulture),
             decimal.Parse(row["Cross-border flow"], CultureInfo.InvariantCulture))),
     ];
+
+    private static DateTimeOffset ParseTimestamp(string value) =>
+        DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);
 
     private static List<TimeSeriesData> InOrder(IEnumerable<TimeSeriesData> data) =>
         [.. data.OrderBy(item => item.Timestamp).ThenBy(item => item.BiddingZone, StringComparer.Ordinal)];

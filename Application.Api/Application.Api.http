@@ -14,3 +14,8 @@ GET {{Application.Api_HostAddress}}/time-series-data?biddingZone=NO1
 Accept: application/json
 
 ###
+
+GET {{Application.Api_HostAddress}}/time-series-data?from=2026-11-17T11:00:00Z&to=2026-11-17T13:00:00Z
+Accept: application/json
+
+###

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using NordicRCC.Domain;
@@ -23,6 +24,25 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
 
     public Task<IReadOnlyList<TimeSeriesData>> FetchForBiddingZoneAsync(string biddingZone) =>
         FetchAsync($"/time-series-data?biddingZone={Uri.EscapeDataString(biddingZone)}");
+
+    public Task<IReadOnlyList<TimeSeriesData>> FetchForPeriodAsync(DateTimeOffset? from, DateTimeOffset? to)
+    {
+        var parameters = new List<string>();
+
+        if (from is { } fromValue)
+        {
+            parameters.Add($"from={Uri.EscapeDataString(fromValue.ToString("O", CultureInfo.InvariantCulture))}");
+        }
+
+        if (to is { } toValue)
+        {
+            parameters.Add($"to={Uri.EscapeDataString(toValue.ToString("O", CultureInfo.InvariantCulture))}");
+        }
+
+        return FetchAsync(parameters.Count == 0
+            ? "/time-series-data"
+            : $"/time-series-data?{string.Join('&', parameters)}");
+    }
 
     private async Task<IReadOnlyList<TimeSeriesData>> FetchAsync(string requestUri)
     {

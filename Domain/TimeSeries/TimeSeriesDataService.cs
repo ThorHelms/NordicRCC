@@ -15,6 +15,16 @@ public sealed class TimeSeriesDataService(INordicRccDbContext database) : ITimeS
             query = query.Where(data => data.BiddingZone == filter.BiddingZone);
         }
 
+        if (filter.From is { } from)
+        {
+            query = query.Where(data => data.Timestamp >= from);
+        }
+
+        if (filter.To is { } to)
+        {
+            query = query.Where(data => data.Timestamp < to);
+        }
+
         return await query
             .OrderBy(data => data.Timestamp)
             .ThenBy(data => data.BiddingZone)
