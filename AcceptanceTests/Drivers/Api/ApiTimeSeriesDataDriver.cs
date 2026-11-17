@@ -19,9 +19,14 @@ public sealed class ApiTimeSeriesDataDriver(ApiHost host) : ITimeSeriesDataDrive
         await database.SaveChangesAsync();
     }
 
-    public async Task<IReadOnlyList<TimeSeriesData>> FetchAllAsync()
+    public Task<IReadOnlyList<TimeSeriesData>> FetchAllAsync() => FetchAsync("/time-series-data");
+
+    public Task<IReadOnlyList<TimeSeriesData>> FetchForBiddingZoneAsync(string biddingZone) =>
+        FetchAsync($"/time-series-data?biddingZone={Uri.EscapeDataString(biddingZone)}");
+
+    private async Task<IReadOnlyList<TimeSeriesData>> FetchAsync(string requestUri)
     {
-        var response = await host.Client.GetFromJsonAsync<List<TimeSeriesDataResponse>>("/time-series-data")
+        var response = await host.Client.GetFromJsonAsync<List<TimeSeriesDataResponse>>(requestUri)
             ?? throw new InvalidOperationException("The system returned no time series data, not even an empty list.");
 
         return [.. response.Select(item => new TimeSeriesData(

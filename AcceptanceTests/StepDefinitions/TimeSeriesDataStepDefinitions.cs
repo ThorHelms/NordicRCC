@@ -22,6 +22,10 @@ public sealed class TimeSeriesDataStepDefinitions(ITimeSeriesDataDriver timeSeri
     [When("all time series data is fetched")]
     public async Task WhenAllTimeSeriesDataIsFetched() => _fetched = await timeSeriesData.FetchAllAsync();
 
+    [When("the time series data for bidding zone {string} is fetched")]
+    public async Task WhenTheTimeSeriesDataForBiddingZoneIsFetched(string biddingZone) =>
+        _fetched = await timeSeriesData.FetchForBiddingZoneAsync(biddingZone);
+
     [Then("the following time series data is returned")]
     public async Task ThenTheFollowingTimeSeriesDataIsReturned(DataTable table)
     {

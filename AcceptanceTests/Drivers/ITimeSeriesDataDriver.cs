@@ -8,4 +8,6 @@ public interface ITimeSeriesDataDriver
     Task RecordAsync(IEnumerable<TimeSeriesData> data);
 
     Task<IReadOnlyList<TimeSeriesData>> FetchAllAsync();
+
+    Task<IReadOnlyList<TimeSeriesData>> FetchForBiddingZoneAsync(string biddingZone);
 }

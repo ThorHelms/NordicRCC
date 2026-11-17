@@ -6,17 +6,18 @@ public static class TimeSeriesDataEndpoints
 {
     public static IEndpointRouteBuilder MapTimeSeriesDataEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/time-series-data", GetAllTimeSeriesDataAsync)
-            .WithName("GetAllTimeSeriesData");
+        endpoints.MapGet("/time-series-data", GetTimeSeriesDataAsync)
+            .WithName("GetTimeSeriesData");
 
         return endpoints;
     }
 
-    private static async Task<IReadOnlyList<TimeSeriesDataDto>> GetAllTimeSeriesDataAsync(
+    private static async Task<IReadOnlyList<TimeSeriesDataDto>> GetTimeSeriesDataAsync(
+        [AsParameters] TimeSeriesDataRequest request,
         ITimeSeriesDataService timeSeriesData,
         CancellationToken cancellationToken)
     {
-        var data = await timeSeriesData.GetAllAsync(cancellationToken);
+        var data = await timeSeriesData.GetAsync(request.ToFilter(), cancellationToken);
 
         return [.. data.Select(TimeSeriesDataDto.From)];
     }

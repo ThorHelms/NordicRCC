@@ -9,3 +9,8 @@ GET {{Application.Api_HostAddress}}/time-series-data
 Accept: application/json
 
 ###
+
+GET {{Application.Api_HostAddress}}/time-series-data?biddingZone=NO1
+Accept: application/json
+
+###
